@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	logger = logging.GetLogger("storage")
+	logger = logging.GetLogger("stora90-ge")
 	DefaultCheckInterval = 1000
 )
 

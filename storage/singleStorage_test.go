@@ -44,3 +44,26 @@ func TestWrite(t *testing.T) {
 		return
 	}
 }
+
+func TestQueryAfterWrite(t *testing.T){
+	s := NewSingleStorage("http://localhost:8086")
+	defer s.Close()
+
+	// write
+	err := s.Write("mydb",[]byte("cpu,host=server01,region=uswest value=1 1434055562000000000\ncpu value=3,value2=4 1434055562000010000"))
+	if err != nil {
+		t.Errorf("error: %s", err)
+		return
+	}
+
+	// query
+	q := make(url.Values, 1)
+	q.Set("db", "mydb")
+	q.Set("q", "SELECT * FROM \"cpu\"")
+	results, err := s.Query(q.Encode())
+	if err != nil {
+		t.Errorf("error: %s", err)
+		return
+	}
+	t.Log(string(results))
+}
