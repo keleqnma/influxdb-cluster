@@ -2,70 +2,91 @@ package conf
 
 import (
 	"encoding/json"
-	"github.com/spf13/viper"
-	"go.etcd.io/etcd/client/v3"
-	"golang.org/x/net/context"
 	"influxcluster/logging"
 	"os"
 	"time"
+
+	"github.com/spf13/viper"
+	clientv3 "go.etcd.io/etcd/client/v3"
+	"golang.org/x/net/context"
 )
 
-var configPath string
-var logger = logging.GetLogger("conf")
-var cli *clientv3.Client
+var (
+	logger     = logging.GetLogger("conf")
+	cli        *clientv3.Client
+	appConfig  APPConfig
+	configPath string
+)
 
-type BackendConfig struct{
-	URL             string
-	Zone            string
-	Interval        int
-	Timeout         int
-	TimeoutQuery    int
-	MaxRowLimit     int
-	CheckInterval   int
+type StorageConfig struct {
+	URL           string
+	Zone          string
+	Interval      int
+	Timeout       int
+	TimeoutQuery  int
+	MaxRowLimit   int
+	CheckInterval int
 }
 
-type NodeConfig struct{
+type NodeConfig struct {
 	ListenAddr   string
-	DB           string
 	Zone         string
-	Nexts        string //the backends keys, will accept all data, split with ','
 	Interval     int
-	IdleTimeout  int
 	WriteTracing int
 	QueryTracing int
 }
 
-var appConfig NodeConfig
+type APPConfig struct {
+	StorageCfgs []StorageConfig
+	NodeCfg     NodeConfig
+}
 
 func init() {
 	configPath = "conf_" + os.Getenv("APP_ENV")
 	loadConfig(configPath)
 	cfg := clientv3.Config{
-		Endpoints:               viper.GetStringSlice("etcd.endpoints"),
-		DialTimeout: time.Second*time.Duration(viper.GetInt("etcd.header_timeout")),
+		Endpoints:   viper.GetStringSlice("etcd.endpoints"),
+		DialTimeout: time.Second * time.Duration(viper.GetInt("etcd.header_timeout")),
 	}
 
 	var err error
 	cli, err = clientv3.New(cfg)
 	if err != nil {
-		logger.Fatal(cfg,err)
+		logger.Fatal(cfg, err)
 	}
-
-	logger.Info(cli.Endpoints())
-	initConfig()
+	initConfig(configPath, &appConfig)
 }
 
-func initConfig() {
-	resp, err := cli.Get(context.Background(), configPath)
-	if err != nil{
-		logger.Error(resp,err)
-	}else if resp != nil && len(resp.Kvs) >= 1{
-		err = json.Unmarshal(resp.Kvs[0].Value, &appConfig)
+func initConfig(key string, v interface{}) {
+	resp, err := cli.Get(context.Background(), key)
+	if err != nil {
+		logger.Error(resp, err)
+		return
+	}
+
+	if resp != nil && len(resp.Kvs) >= 1 {
+		err = json.Unmarshal(resp.Kvs[0].Value, v)
 		if err != nil {
-			logger.Error(resp,err)
+			logger.Error(resp, err)
+			return
 		}
 	}
-	watchAndUpdate()
+	watchAndUpdate(key, v)
+}
+
+func watchAndUpdate(key string, v interface{}) {
+	rch := cli.Watch(context.Background(), key, clientv3.WithProgressNotify())
+	go func() {
+		// watch 该节点下的每次变化
+		for wresp := range rch {
+			for _, ev := range wresp.Events {
+				err := json.Unmarshal(ev.Kv.Value, v)
+				if err != nil {
+					continue
+				}
+			}
+		}
+	}()
 }
 
 func loadConfig(in string, paths ...string) {
@@ -79,27 +100,11 @@ func loadConfig(in string, paths ...string) {
 		viper.AddConfigPath(configPath)
 	}
 	err = viper.ReadInConfig() // Find and read the config file
-	if err != nil {             // Handle errors reading the config file
+	if err != nil {            // Handle errors reading the config file
 		logger.Fatal("fail to load config file:", err)
 	}
 }
 
-func watchAndUpdate() {
-	rch := cli.Watch(context.Background(), configPath, clientv3.WithProgressNotify())
-	go func() {
-		// watch 该节点下的每次变化
-		for wresp := range rch {
-			for _, ev := range wresp.Events {
-				err := json.Unmarshal(ev.Kv.Value, &appConfig)
-				if err != nil {
-					//logger.Info(resp,err)
-					continue
-				}
-			}
-		}
-	}()
-}
-
-func GetConfig() NodeConfig{
+func GetConfig() APPConfig {
 	return appConfig
 }
