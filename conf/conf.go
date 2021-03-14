@@ -1,14 +1,16 @@
 package conf
 
 import (
+	"context"
 	"encoding/json"
 	"influxcluster/logging"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/spf13/viper"
+
 	clientv3 "go.etcd.io/etcd/client/v3"
-	"golang.org/x/net/context"
 )
 
 var (
@@ -16,6 +18,7 @@ var (
 	cli        *clientv3.Client
 	appConfig  APPConfig
 	configPath string
+	mu         sync.RWMutex
 )
 
 type StorageConfig struct {
@@ -42,8 +45,9 @@ type APPConfig struct {
 }
 
 func init() {
+	mu = sync.RWMutex{}
 	configPath = "conf_" + os.Getenv("APP_ENV")
-	loadConfig(configPath)
+	loadConfig(configPath, "conf")
 	cfg := clientv3.Config{
 		Endpoints:   viper.GetStringSlice("etcd.endpoints"),
 		DialTimeout: time.Second * time.Duration(viper.GetInt("etcd.header_timeout")),
@@ -65,7 +69,9 @@ func initConfig(key string, v interface{}) {
 	}
 
 	if resp != nil && len(resp.Kvs) >= 1 {
+		mu.Lock()
 		err = json.Unmarshal(resp.Kvs[0].Value, v)
+		mu.Unlock()
 		if err != nil {
 			logger.Error(resp, err)
 			return
@@ -80,7 +86,9 @@ func watchAndUpdate(key string, v interface{}) {
 		// watch 该节点下的每次变化
 		for wresp := range rch {
 			for _, ev := range wresp.Events {
+				mu.Lock()
 				err := json.Unmarshal(ev.Kv.Value, v)
+				mu.Unlock()
 				if err != nil {
 					continue
 				}
@@ -106,5 +114,7 @@ func loadConfig(in string, paths ...string) {
 }
 
 func GetConfig() APPConfig {
+	mu.RLock()
+	defer mu.RUnlock()
 	return appConfig
 }

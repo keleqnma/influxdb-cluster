@@ -2,6 +2,7 @@ package server
 
 import (
 	"errors"
+	"influxcluster/conf"
 	"influxcluster/logging"
 	"influxcluster/service"
 	"io/ioutil"
@@ -20,11 +21,12 @@ type ClusterServer struct {
 	*service.ClusterService
 }
 
-func NewClusterServer() *ClusterServer {
+func NewClusterServer(appCfg conf.APPConfig) *ClusterServer {
 	return &ClusterServer{
-		&service.ClusterService{},
+		service.NewInfluxCluster(appCfg),
 	}
 }
+
 func (cs *ClusterServer) Query(c *gin.Context) {
 	db, ok := c.GetQuery("db")
 	if !ok {
@@ -36,7 +38,7 @@ func (cs *ClusterServer) Query(c *gin.Context) {
 		c.AbortWithError(http.StatusBadRequest, ErrNoQuery)
 		return
 	}
-	res, err := cs.ClusterService.Query(db, []byte(q))
+	res, err := cs.ClusterService.Query(db, q)
 	if err != nil {
 		c.AbortWithError(http.StatusBadRequest, err)
 		return

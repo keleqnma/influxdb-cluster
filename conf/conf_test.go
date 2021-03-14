@@ -23,7 +23,8 @@ func TestWatchConf(t *testing.T) {
 		},
 	}
 	testConfig.StorageCfgs = append(testConfig.StorageCfgs, StorageConfig{
-		URL: "http://localhost:8086",
+		URL:           "http://localhost:8086",
+		CheckInterval: 1000,
 	})
 	data, err := json.Marshal(testConfig)
 	if err != nil {

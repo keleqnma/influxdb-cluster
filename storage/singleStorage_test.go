@@ -1,12 +1,19 @@
 package storage
 
 import (
-	"net/url"
+	"influxcluster/conf"
 	"testing"
 )
 
+func GetTestCfg() conf.StorageConfig {
+	return conf.StorageConfig{
+		URL:           "http://localhost:8086",
+		CheckInterval: 1000,
+	}
+}
+
 func TestPing(t *testing.T) {
-	s := NewSingleStorage("http://localhost:8086")
+	s := NewSingleStorage(GetTestCfg())
 	defer s.Close()
 
 	version, err := s.Ping()
@@ -17,16 +24,12 @@ func TestPing(t *testing.T) {
 	if version == "" {
 		t.Errorf("empty version")
 	}
-	return
 }
 
-func TestQuery(t *testing.T){
-	s := NewSingleStorage("http://localhost:8086")
+func TestQuery(t *testing.T) {
+	s := NewSingleStorage(GetTestCfg())
 	defer s.Close()
-	q := make(url.Values, 1)
-	q.Set("db", "mydb")
-	q.Set("q", "SELECT * FROM \"cpu_load_short\"")
-	results, err := s.Query(q.Encode())
+	results, err := s.Query("mydb", "SELECT * FROM \"cpu_load_short\"")
 	if err != nil {
 		t.Errorf("error: %s", err)
 		return
@@ -35,32 +38,29 @@ func TestQuery(t *testing.T){
 }
 
 func TestWrite(t *testing.T) {
-	s := NewSingleStorage("http://localhost:8086")
+	s := NewSingleStorage(GetTestCfg())
 	defer s.Close()
 
-	err := s.Write("mydb",[]byte("cpu,host=server01,region=uswest value=1 1434055562000000000\ncpu value=3,value2=4 1434055562000010000"))
+	err := s.Write("mydb", []byte("cpu,host=server01,region=uswest value=1 1434055562000000000\ncpu value=3,value2=4 1434055562000010000"))
 	if err != nil {
 		t.Errorf("error: %s", err)
 		return
 	}
 }
 
-func TestQueryAfterWrite(t *testing.T){
-	s := NewSingleStorage("http://localhost:8086")
+func TestQueryAfterWrite(t *testing.T) {
+	s := NewSingleStorage(GetTestCfg())
 	defer s.Close()
 
 	// write
-	err := s.Write("mydb",[]byte("cpu,host=server01,region=uswest value=1 1434055562000000000\ncpu value=3,value2=4 1434055562000010000"))
+	err := s.Write("mydb", []byte("cpu,host=server01,region=uswest value=1 1434055562000000000\ncpu value=3,value2=4 1434055562000010000"))
 	if err != nil {
 		t.Errorf("error: %s", err)
 		return
 	}
 
 	// query
-	q := make(url.Values, 1)
-	q.Set("db", "mydb")
-	q.Set("q", "SELECT * FROM \"cpu\"")
-	results, err := s.Query(q.Encode())
+	results, err := s.Query("mydb", "SELECT * FROM \"cpu_load_short\"")
 	if err != nil {
 		t.Errorf("error: %s", err)
 		return

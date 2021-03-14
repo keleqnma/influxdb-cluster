@@ -1,6 +1,7 @@
 package router
 
 import (
+	"influxcluster/conf"
 	"influxcluster/server"
 
 	"github.com/gin-gonic/gin"
@@ -12,7 +13,7 @@ type Router struct {
 
 func NewRouter() *Router {
 	return &Router{
-		clusterSrv: server.NewClusterServer(),
+		clusterSrv: server.NewClusterServer(conf.GetConfig()),
 	}
 }
 

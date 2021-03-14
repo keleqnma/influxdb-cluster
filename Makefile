@@ -1,5 +1,5 @@
 default:
-	arun sh -c 'go generate doc.go && APP_ENV=local go run cmd/main.go'
+	arun sh -c 'APP_ENV=local go run cmd/main.go'
 
 arun:
 	arun sh -c 'APP_ENV=local go run cmd/main.go'

@@ -2,6 +2,7 @@ package storage
 
 import (
 	"fmt"
+	"influxcluster/conf"
 	"influxcluster/logging"
 	"io"
 	"io/ioutil"
@@ -11,40 +12,44 @@ import (
 )
 
 var (
-	logger = logging.GetLogger("stora90-ge")
+	logger               = logging.GetLogger("stora90-ge")
 	DefaultCheckInterval = 1000
 )
 
 type SingleStorage struct {
-	client    *http.Client
-	transport http.Transport
+	client        *http.Client
+	transport     http.Transport
 	CheckInterval int
-	BaseURL string
-	Active    bool
-	running   bool
+	BaseURL       string
+	Active        bool
+	running       bool
 }
 
-func NewSingleStorage(baseURL string)(s *SingleStorage){
+func NewSingleStorage(cfg conf.StorageConfig) (s *SingleStorage) {
 	s = &SingleStorage{
-		client:    &http.Client{},
-		BaseURL:   baseURL,
-		CheckInterval: DefaultCheckInterval,
+		client:        &http.Client{},
+		BaseURL:       cfg.URL,
+		CheckInterval: cfg.CheckInterval,
+		running:       true,
 	}
 	go s.checkActive()
 	return
 }
 
-func (s *SingleStorage) Query(q string) (results []byte, err error){
+func (s *SingleStorage) Query(db, q string) (results []byte, err error) {
 	var req *http.Request
-	req, err = http.NewRequest("GET",s.BaseURL + "/query?" + q,nil )
-	if err != nil{
+	query := make(url.Values, 1)
+	query.Set("db", db)
+	query.Set("q", q)
+	req, err = http.NewRequest("GET", s.BaseURL+"/query?"+query.Encode(), nil)
+	if err != nil {
 		return nil, err
 	}
 	resp, err := s.transport.RoundTrip(req)
-	if err != nil{
+	if err != nil {
 		return nil, err
 	}
-	if resp.StatusCode != http.StatusOK{
+	if resp.StatusCode != http.StatusOK {
 		err = fmt.Errorf("response code error, resp:%v", resp)
 		return
 	}
@@ -53,20 +58,27 @@ func (s *SingleStorage) Query(q string) (results []byte, err error){
 		err = fmt.Errorf("read body error: %s,the query is %s\n", err, q)
 		return
 	}
-	logger.Infof("storage %s query %s",s.BaseURL,q)
+	if resp.Header.Get("Content-Encoding") == "gzip" {
+		results, err := gzipUnCompress(results)
+		if err != nil {
+			err = fmt.Errorf("unzip body error: %s,the query is %s\n", err, q)
+			return results, err
+		}
+	}
+	logger.Infof("storage %s query %s", s.BaseURL, q)
 	return
 }
 
 // lp, Line Protocol, contains the time series data that you want to store. Its components are measurement, tags, fields and timestamp.
-func (s *SingleStorage) Write(db string, lp []byte)(err error){
+func (s *SingleStorage) Write(db string, lp []byte) (err error) {
 	buf, err := gzipCompress(lp)
 	if err != nil {
 		logger.Error("compress error: ", err)
 		return
 	}
 
-	logger.Infof("storage %s %s write %s",s.BaseURL,db,string(lp))
-	err = s.WriteStream(db,buf, true)
+	logger.Infof("storage %s %s write %s", s.BaseURL, db, string(lp))
+	err = s.WriteStream(db, buf, true)
 	return
 }
 
@@ -112,29 +124,28 @@ func (s *SingleStorage) WriteStream(db string, stream io.Reader, compressed bool
 	return
 }
 
-func (s *SingleStorage) checkActive(){
+func (s *SingleStorage) checkActive() {
 	var err error
 	for s.running {
 		_, err = s.Ping()
 		s.Active = err == nil
 		time.Sleep(time.Millisecond * time.Duration(s.CheckInterval))
 	}
-	return
 }
 
-func (s *SingleStorage) Ping() (version string, err error){
+func (s *SingleStorage) Ping() (version string, err error) {
 	endpoint := s.BaseURL + "/ping"
 	resp, err := s.client.Get(endpoint)
 	if err != nil {
 		logger.Info("network error: ", err)
 		return
 	}
-	if resp != nil && resp.Body != nil{
+	if resp != nil && resp.Body != nil {
 		defer resp.Body.Close()
 	}
 
 	version = resp.Header.Get("X-Influxdb-Version")
-	logger.Infof("ping %s, version:%s\n",endpoint,version)
+	logger.Infof("ping %s, version:%s\n", endpoint, version)
 	// Receive HTTP 204 No Content after writing the data, indicating that the writing was successful
 	if resp.StatusCode == http.StatusNoContent {
 		return
@@ -149,7 +160,7 @@ func (s *SingleStorage) Ping() (version string, err error){
 	return
 }
 
-func (s *SingleStorage) Close() (err error){
+func (s *SingleStorage) Close() (err error) {
 	s.running = false
 	s.transport.CloseIdleConnections()
 	return
