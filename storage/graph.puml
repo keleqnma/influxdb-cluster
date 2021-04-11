@@ -1,0 +1,17 @@
+@startuml
+class SingleStorage {
+-client: *Client
+-transport: Transport
++CheckInterval: int
++BaseURL: string
++Active: bool
+-running: bool
++*Query(db string): []byte, error
++*Write(db string, lp []byte): error
++*WriteStream(db string, stream Reader, compressed bool): error
++*checkActive(): 
++*Ping(): string, error
++*Close(): error
+}
+
+@enduml

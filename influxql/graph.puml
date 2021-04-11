@@ -1,0 +1,12 @@
+@startuml
+class InfluxQL {
++Mechanism: string
++DB: string
++Query: string
++Write: []byte
++URL: string
++Measurement: string
+
+}
+
+@enduml

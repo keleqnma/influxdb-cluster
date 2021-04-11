@@ -1,0 +1,18 @@
+@startuml
+class StorageConfig {
++URL: string
++Zone: string
++Interval: int
++Timeout: int
++TimeoutQuery: int
++MaxRowLimit: int
++CheckInterval: int
+
+}
+class APPConfig {
++StorageCfgs: []StorageConfig
++Rules: Map
+
+}
+
+@enduml

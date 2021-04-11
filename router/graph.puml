@@ -1,0 +1,8 @@
+@startuml
+class Router {
+-clusterSrv: *ClusterServer
++*PublicServer(): *Engine
++*Dispose(): 
+}
+
+@enduml

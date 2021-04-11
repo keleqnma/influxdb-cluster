@@ -1,0 +1,28 @@
+@startuml
+class ClusterService {
+-storages: []*SingleStorage
+-mu: RWMutex
+-stats: *Statistics
++*Query(db string): []byte, error
++*QueryT(ql *InfluxQL): []byte, error
++*Write(db string, lp []byte): error
++*WriteT(ql *InfluxQL): error
++*ReloadCfg(configs []StorageConfig): error
++*Close(): error
++*GetStats(): Statistics
+}
+class Statistics {
++QueryRequests: int64
++QueryRequestsFail: int64
++WriteRequests: int64
++WriteRequestsFail: int64
++PingRequests: int64
++PingRequestsFail: int64
++PointsWritten: int64
++PointsWrittenFail: int64
++WriteRequestDuration: int64
++QueryRequestDuration: int64
++*Flush(): 
+}
+
+@enduml

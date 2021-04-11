@@ -1,0 +1,10 @@
+@startuml
+class ClusterServer {
++: *ClusterService
++*Query(c *Context): 
++*Write(c *Context): 
++*GetStats(c *Context): 
++*GetCfg(c *Context): 
+}
+
+@enduml
